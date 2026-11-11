@@ -1,0 +1,313 @@
+---
+title: "Confirmatory Factor Analysis in R: Study Note"
+author: "Georgia Monjarrez"
+date: today
+format:
+  html:
+    toc: true
+    number-sections: true
+    embed-resources: true
+    theme: none
+    minimal: true
+    highlight-style: none
+    html-math-method: mathml
+    include-in-header:
+      text: |
+        <style>
+        body { max-width: 58rem; margin: 2.5rem auto; padding: 0 1.5rem; font-family: system-ui, sans-serif; line-height: 1.6; color: #222d32; }
+        h1, h2 { line-height: 1.2; color: #163e38; }
+        h1 { margin-top: 2.25rem; }
+        a { color: #125e50; }
+        pre { padding: 1rem; overflow: auto; background: #f3f6f5; border: 1px solid #dce5e1; border-radius: .3rem; }
+        code { font-family: ui-monospace, monospace; font-size: .91em; }
+        table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        caption { text-align: left; font-weight: 600; padding-bottom: .35rem; }
+        th, td { padding: .3rem .55rem; border-bottom: 1px solid #dce5e1; }
+        nav ul { padding-left: 1.4rem; }
+        </style>
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+Using UCLA’s SAQ-8 data, this note compares one-factor, two-factor, and second-order CFA models.
+
+# Data and software
+
+Install the packages with `install.packages(c("haven", "lavaan", "knitr"))`. Following UCLA, the models use maximum likelihood (ML) and treat the original item codes as numeric.
+
+```{r}
+library(haven)
+library(lavaan)
+
+# Use a local copy when available, otherwise read UCLA's public file.
+saq_source <- "https://stats.oarc.ucla.edu/wp-content/uploads/2018/05/SAQ.sav"
+saq_path <- Sys.getenv("SAQ_FILE", unset = "SAQ.sav")
+raw <- read_sav(if (file.exists(saq_path)) saq_path else saq_source)
+items <- sprintf("q%02d", 1:8)
+saq <- as.data.frame(lapply(raw[items], as.numeric))
+
+dim(raw)
+str(saq)
+colSums(is.na(saq))
+knitr::kable(head(saq), caption = "First six SAQ-8 records")
+knitr::kable(cor(saq), digits = 2, caption = "Pearson item correlations")
+```
+
+The file has 2,571 responses and 23 variables. All eight SAQ items are complete. The two computer items, q06 and q07, have the strongest positive correlation (.51). The positively worded q03 correlates negatively with anxiety items such as q04 (−.38). Item q02 correlates weakly with most items, except q03 (.32).
+
+# CFA concepts
+
+## Measurement model and implied covariance
+
+An observed indicator is a recorded item response. A latent factor is a construct inferred from common variation in the indicators. For item $i$, the measurement equation is $y_i = \tau_i + \lambda_i\eta + \epsilon_i$, where $\tau_i$ is an intercept, $\eta$ is the latent factor, $\lambda_i$ is the loading, and $\epsilon_i$ is the residual. The covariance-only models below use the centered form of this equation.
+
+If residuals are uncorrelated with the factors, the implied item covariance matrix is $\widehat\Sigma = \widehat\Lambda\widehat\Phi\widehat\Lambda^\top + \widehat\Theta$. The loading matrix $\Lambda$ links factors to items, $\Phi$ gives the covariance of the factors, and $\Theta$ contains the item residual variances and any modeled residual covariances. Here $\Theta$ is diagonal. For example, the three-item model predicts $\operatorname{Cov}(q03,q04) = \lambda_{03}\lambda_{04}\operatorname{Var}(f)$.
+
+In a path diagram, ovals represent factors, rectangles represent items, single-headed arrows show loadings, and double-headed arrows show covariances.
+
+## Identification and degrees of freedom
+
+Identification asks whether the observed moments determine a unique parameter solution once the scale and direction of each factor are set. The known values are distinct observed variances and covariances. Free parameters are estimated, and fixed parameters are assigned values by the model. For $p$ items and a covariance-only model, $df = p(p+1)/2 - k$, where $k$ is the number of independent free parameters.
+
+| Example | Known moments | Free parameters | Degrees of freedom |
+|---|---:|---:|---:|
+| Three items with marker loading | 6 | 2 loadings + 3 residual variances + 1 factor variance | 0 |
+| Three items with unit factor variance | 6 | 3 loadings + 3 residual variances | 0 |
+| Two items with only a marker constraint | 3 | 1 loading + 2 residual variances + 1 factor variance | −1 |
+| Eight items with marker loading | 36 | 7 loadings + 8 residual variances + 1 factor variance | 20 |
+
+The two-item model is under-identified. Both three-item models are just-identified, and the eight-item model is over-identified. A nonnegative degrees-of-freedom count is necessary for identification, and the model structure must also permit unique estimates.
+
+# One-factor CFA
+
+## Three-item model
+
+The operator `=~` assigns q03, q04, and q05 to factor `f`. The marker method fixes the q03 loading to 1 and estimates the factor variance. The unit-variance method frees the q03 loading with `NA*` and fixes the variance to 1.
+
+```{r}
+m1a <- 'f =~ q03 + q04 + q05'
+m1b <- '
+  f =~ NA*q03 + q04 + q05
+  f ~~ 1*f
+'
+marker <- cfa(m1a, data = saq)
+unit <- cfa(m1b, data = saq)
+
+summary(marker, standardized = TRUE)
+summary(unit, standardized = TRUE)
+
+# Compare the covariance implied by the model with lavaan's ML input.
+implied <- fitted(marker)$cov
+round(implied, 3)
+round(lavInspect(marker, "sampstat")$cov - implied, 6)
+max(abs(implied - fitted(unit)$cov))
+```
+
+Using q03 as the marker gives q04 and q05 negative loadings. Both scaling methods yield equivalent implied covariances and fully standardized estimates. For these single-loading items, squaring `Std.all` gives the explained proportion of item variance. The standardized residual variance gives the remainder. Both models reproduce the sample covariance because they have zero degrees of freedom.
+
+## Eight-item model
+
+This model tests whether one factor can reproduce the covariances among all eight items.
+
+```{r}
+eight_spec <- 'f =~ q01 + q02 + q03 + q04 + q05 + q06 + q07 + q08'
+eight <- cfa(eight_spec, data = saq)
+summary(eight, fit.measures = TRUE, standardized = TRUE, rsquare = TRUE)
+```
+
+The model fits poorly overall ($\chi^2(20)=554.191$, $p<.001$, CFI = .871, TLI = .819, RMSEA = .102), despite an SRMR of .055. Item q02 has a weak standardized loading and high residual variance.
+
+SRMR summarizes standardized residuals. Lower AIC and BIC favor models fitted to the same observed items and cases.
+
+# Two-factor CFA
+
+UCLA omits q02. SPSS Anxiety uses q01, q03–q05, and q08. Attribution Bias uses the two computer items, q06 and q07.
+
+```{r}
+loading_table <- function(fit) {
+  estimates <- parameterEstimates(fit, standardized = TRUE)
+  rows <- estimates$op == "=~"
+  knitr::kable(
+    estimates[rows, c("lhs", "rhs", "est", "std.all")],
+    col.names = c("Factor", "Indicator", "Estimate", "Std. loading"),
+    digits = 3, row.names = FALSE
+  )
+}
+```
+
+## Uncorrelated factors
+
+The model fixes factor covariance at zero. The label `a` equates the two raw Attribution Bias loadings for identification with unit factor variance.
+
+```{r}
+orthogonal_spec <- '
+  anxiety =~ q01 + q03 + q04 + q05 + q08
+  attribution =~ a*q06 + a*q07
+  anxiety ~~ 0*attribution
+'
+orthogonal <- cfa(orthogonal_spec, data = saq, std.lv = TRUE)
+loading_table(orthogonal)
+```
+
+The standardized q06 and q07 loadings are .710 and .723 because the item variances differ. The model implies zero cross-factor item covariance and fits poorly (RMSEA = .146).
+
+## Correlated factors
+
+This model estimates the factor covariance and lets the computer-item loadings differ. With `std.lv = TRUE`, the covariance is also the correlation. A nonzero association with SPSS Anxiety helps identify the two computer-item loadings.
+
+```{r}
+correlated_spec <- '
+  anxiety =~ q01 + q03 + q04 + q05 + q08
+  attribution =~ q06 + q07
+  anxiety ~~ attribution
+'
+correlated <- cfa(correlated_spec, data = saq, std.lv = TRUE)
+loading_table(correlated)
+round(lavInspect(correlated, "cor.lv"), 3)
+```
+
+The factors correlate .676. Fit improves (CFI = .986, TLI = .977, RMSEA = .040), although chi-square still rejects exact fit. The comparison reflects both the freed covariance and the freed loading equality constraint.
+
+# Second-order CFA
+
+Overall Anxiety predicts the two first-order factors. Each first-order factor uses its first item as the marker. Both higher-order loadings are fixed to 1 for identification, and the overall factor variance is estimated. The first-order factors’ residual covariance is fixed to zero.
+
+```{r}
+hierarchy_spec <- '
+  anxiety =~ 1*q01 + q03 + q04 + q05 + q08
+  attribution =~ 1*q06 + q07
+  overall =~ 1*anxiety + 1*attribution
+  overall ~~ overall
+  anxiety ~~ 0*attribution
+'
+hierarchy <- cfa(hierarchy_spec, data = saq)
+loading_table(hierarchy)
+```
+
+The standardized higher-order loadings (.939 and .720) multiply to .676, the correlation from the two-factor model. Both models have the same fit, so these data cannot distinguish the hierarchical interpretation.
+
+# Model comparison
+
+The seven-item one-factor model allows comparison on the same items and respondents as the two-factor and second-order models.
+
+```{r}
+seven_spec <- 'f =~ q01 + q03 + q04 + q05 + q06 + q07 + q08'
+seven <- cfa(seven_spec, data = saq)
+
+models <- list(
+  "One factor, eight items" = eight,
+  "One factor, seven items" = seven,
+  "Two uncorrelated factors" = orthogonal,
+  "Two correlated factors" = correlated,
+  "Second-order factor" = hierarchy
+)
+stopifnot(all(vapply(models, function(fit) {
+  lavInspect(fit, "converged") && lavInspect(fit, "post.check")
+}, logical(1))))
+
+fit_columns <- c("chisq", "df", "pvalue", "cfi", "tli", "rmsea",
+                 "rmsea.ci.lower", "rmsea.ci.upper", "srmr")
+comparison <- as.data.frame(t(vapply(
+  models, function(fit) as.numeric(fitMeasures(fit, fit_columns)),
+  numeric(length(fit_columns))
+)))
+names(comparison) <- c("Chi-square", "df", "p", "CFI", "TLI",
+                       "RMSEA", "90% CI low", "90% CI high", "SRMR")
+comparison$p <- format.pval(comparison$p, digits = 3, eps = .001)
+knitr::kable(comparison, digits = 3, caption = "Maximum likelihood model fit")
+
+# Check whether the two best-fitting models reproduce the same item covariances.
+order7 <- c("q01", "q03", "q04", "q05", "q08", "q06", "q07")
+max(abs(fitted(correlated)$cov[order7, order7] -
+        fitted(hierarchy)$cov[order7, order7]))
+```
+
+The correlated model fits the seven items best alongside the equivalent second-order model. The two-factor structure preserves two interpretable dimensions with fewer theoretical assumptions.
+
+# Practice questions and answers
+
+1. **What is the difference between exploratory factor analysis and confirmatory factor analysis?**
+
+    EFA explores possible factor structures. CFA tests whether a prespecified structure reproduces the observed covariances.
+
+2. **What are the observed indicators and latent factors in the SAQ-8 example?**
+
+    The observed indicators are q01–q08. The seven-item models use SPSS Anxiety (q01, q03–q05, q08) and Attribution Bias (q06–q07). The hierarchical model adds overall Anxiety.
+
+3. **What do factor loadings represent?**
+
+    A loading is the expected item-score change per unit of the factor. Standardized loadings use standard-deviation units. The .861 loading for q07 shows a stronger association with Attribution Bias than the .596 loading for q06.
+
+4. **What do residual variances represent?**
+
+    Residual variance is the item variance left unexplained by its factor, including item-specific variation and measurement error. For q07, about 26% remains unexplained in the correlated model.
+
+5. **How many unique variances and covariances are available for a model with three observed indicators?**
+
+    There are six unique entries, with three variances and three covariances, from $p(p+1)/2 = 3(4)/2 = 6$.
+
+6. **What is the difference between a fixed parameter and a free parameter?**
+
+    A fixed parameter is set in the model, such as the q03 marker loading of 1. A free parameter, such as the marker model’s factor variance, is estimated.
+
+7. **Why is a model with negative degrees of freedom under-identified?**
+
+    Negative degrees of freedom mean there are more independent free parameters than observed moments, so the parameters cannot be uniquely estimated.
+
+8. **Why does fixing one loading and setting residual covariances to zero help identify a model?**
+
+    A fixed marker loading sets the factor’s unit. Setting residual covariances to zero reduces the unknowns and attributes shared item variation to the factor. This leaves six free parameters for six observed moments in the three-item model.
+
+9. **What is the difference between a just-identified model and an over-identified model?**
+
+    A just-identified model has zero degrees of freedom and can reproduce the observed moments exactly. An over-identified model has positive degrees of freedom, allowing a global fit test.
+
+10. **How should chi-square, CFI, TLI, and RMSEA be interpreted?**
+
+    Chi-square tests exact fit, with a small p-value indicating misfit. Higher CFI and TLI indicate better fit relative to an independence baseline, and TLI accounts for model complexity. Lower RMSEA indicates less approximate misfit per degree of freedom. The eight-item model shows misfit across these measures.
+
+11. **What is the difference between correlated and uncorrelated factors?**
+
+    A correlated model estimates the covariance between factors. An uncorrelated model fixes it at zero, implying zero cross-factor item covariance when cross-loadings and residual covariances are also zero.
+
+12. **What does a second-order factor represent?**
+
+    A second-order factor explains covariance among first-order factors. Here overall Anxiety accounts for the association between SPSS Anxiety and Attribution Bias.
+
+13. **Which model appears most theoretically and statistically appropriate based on the results?**
+
+    I would use the correlated seven-item model. Its fit is good (CFI = .986, TLI = .977, RMSEA = .040), and its two dimensions have clear interpretations. The hierarchy gives the same fit.
+
+14. **What additional information would you want before making a final decision about the measurement model?**
+
+    I would check item wording and coding, the effect of omitting q02, subscale reliability and validity, and fit with an ordinal estimator. I would also replicate the model in a new sample and look for more indicators of Attribution Bias.
+
+# Summary of important lessons
+
+- Check identification before testing fit.
+- Read loadings, residual variances, and fit indices together.
+- Compare models on the same items. Equal fit can leave competing explanations unresolved.
+
+# References
+
+- UCLA Office of Advanced Research Computing. [Confirmatory Factor Analysis (CFA) in R with lavaan](https://stats.oarc.ucla.edu/r/seminars/rcfa/). Seminar, model specifications, and [SAQ dataset](https://stats.oarc.ucla.edu/wp-content/uploads/2018/05/SAQ.sav).
+- Rosseel, Y. (2012). lavaan: An R Package for Structural Equation Modeling. *Journal of Statistical Software, 48*(2), 1–36. [doi:10.18637/jss.v048.i02](https://doi.org/10.18637/jss.v048.i02).
+
+# Appendix
+
+## Reproducibility
+
+```{r}
+c(R = R.version.string, lavaan = as.character(packageVersion("lavaan")),
+  haven = as.character(packageVersion("haven")))
+```
+
+## Project links
+
+- [GitHub repository](https://github.com/gmonjarrez/m11-cfa-study-note)
+- [GitHub Pages website](https://gmonjarrez.github.io/m11-cfa-study-note/)
+

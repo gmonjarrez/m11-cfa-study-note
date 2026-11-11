@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Georgia Monjarrez">
+<meta name="dcterms.date" content="2026-11-10">
+
+<title>Confirmatory Factor Analysis in R: Study Note</title>
+<style>
+
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+width: 0.8em;
+margin: 0 0.8em 0.2em -1em;  vertical-align: middle;
+}
+</style>
+
+
+<style>
+body { max-width: 58rem; margin: 2.5rem auto; padding: 0 1.5rem; font-family: system-ui, sans-serif; line-height: 1.6; color: #222d32; }
+h1, h2 { line-height: 1.2; color: #163e38; }
+h1 { margin-top: 2.25rem; }
+a { color: #125e50; }
+pre { padding: 1rem; overflow: auto; background: #f3f6f5; border: 1px solid #dce5e1; border-radius: .3rem; }
+code { font-family: ui-monospace, monospace; font-size: .91em; }
+table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; margin: 1rem 0; }
+caption { text-align: left; font-weight: 600; padding-bottom: .35rem; }
+th, td { padding: .3rem .55rem; border-bottom: 1px solid #dce5e1; }
+nav ul { padding-left: 1.4rem; }
+</style>
+
+
+</head>
+
+<body>
+
+
+<header id="title-block-header">
+<h1 class="title">Confirmatory Factor Analysis in R: Study Note</h1>
+<p class="author">Georgia Monjarrez</p>
+
+<p class="date">2026-11-10</p>
+</header>
+
+<nav id="TOC" role="doc-toc">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction"><span class="header-section-number">1</span> Introduction</a></li>
+  <li><a href="#data-and-software" id="toc-data-and-software"><span class="header-section-number">2</span> Data and software</a></li>
+  <li><a href="#cfa-concepts" id="toc-cfa-concepts"><span class="header-section-number">3</span> CFA concepts</a>
+  <ul>
+  <li><a href="#measurement-model-and-implied-covariance" id="toc-measurement-model-and-implied-covariance"><span class="header-section-number">3.1</span> Measurement model and implied covariance</a></li>
+  <li><a href="#identification-and-degrees-of-freedom" id="toc-identification-and-degrees-of-freedom"><span class="header-section-number">3.2</span> Identification and degrees of freedom</a></li>
+  </ul></li>
+  <li><a href="#one-factor-cfa" id="toc-one-factor-cfa"><span class="header-section-number">4</span> One-factor CFA</a>
+  <ul>
+  <li><a href="#three-item-model" id="toc-three-item-model"><span class="header-section-number">4.1</span> Three-item model</a></li>
+  <li><a href="#eight-item-model" id="toc-eight-item-model"><span class="header-section-number">4.2</span> Eight-item model</a></li>
+  </ul></li>
+  <li><a href="#two-factor-cfa" id="toc-two-factor-cfa"><span class="header-section-number">5</span> Two-factor CFA</a>
+  <ul>
+  <li><a href="#uncorrelated-factors" id="toc-uncorrelated-factors"><span class="header-section-number">5.1</span> Uncorrelated factors</a></li>
+  <li><a href="#correlated-factors" id="toc-correlated-factors"><span class="header-section-number">5.2</span> Correlated factors</a></li>
+  </ul></li>
+  <li><a href="#second-order-cfa" id="toc-second-order-cfa"><span class="header-section-number">6</span> Second-order CFA</a></li>
+  <li><a href="#model-comparison" id="toc-model-comparison"><span class="header-section-number">7</span> Model comparison</a></li>
+  <li><a href="#practice-questions-and-answers" id="toc-practice-questions-and-answers"><span class="header-section-number">8</span> Practice questions and answers</a></li>
+  <li><a href="#summary-of-important-lessons" id="toc-summary-of-important-lessons"><span class="header-section-number">9</span> Summary of important lessons</a></li>
+  <li><a href="#references" id="toc-references"><span class="header-section-number">10</span> References</a></li>
+  <li><a href="#appendix" id="toc-appendix"><span class="header-section-number">11</span> Appendix</a>
+  <ul>
+  <li><a href="#reproducibility" id="toc-reproducibility"><span class="header-section-number">11.1</span> Reproducibility</a></li>
+  <li><a href="#project-links" id="toc-project-links"><span class="header-section-number">11.2</span> Project links</a></li>
+  </ul></li>
+  </ul>
+</nav>
+<h1 data-number="1" id="introduction"><span class="header-section-number">1</span> Introduction</h1>
+<p>Using UCLA’s SAQ-8 data, this note compares one-factor, two-factor, and second-order CFA models.</p>
+<h1 data-number="2" id="data-and-software"><span class="header-section-number">2</span> Data and software</h1>
+<p>Install the packages with <code>install.packages(c(&quot;haven&quot;, &quot;lavaan&quot;, &quot;knitr&quot;))</code>. Following UCLA, the models use maximum likelihood (ML) and treat the original item codes as numeric.</p>
+<div class="cell">
+<pre class="r cell-code"><code>library(haven)
+library(lavaan)
+
+# Use a local copy when available, otherwise read UCLA&#39;s public file.
+saq_source &lt;- &quot;https://stats.oarc.ucla.edu/wp-content/uploads/2018/05/SAQ.sav&quot;
+saq_path &lt;- Sys.getenv(&quot;SAQ_FILE&quot;, unset = &quot;SAQ.sav&quot;)
+raw &lt;- read_sav(if (file.exists(saq_path)) saq_path else saq_source)
+items &lt;- sprintf(&quot;q%02d&quot;, 1:8)
+saq &lt;- as.data.frame(lapply(raw[items], as.numeric))
+
+dim(raw)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 2571   23</code></pre>
+</div>
+<pre class="r cell-code"><code>str(saq)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>&#39;data.frame&#39;:   2571 obs. of  8 variables:
+ $ q01: num  2 1 2 3 2 2 2 2 3 2 ...
+ $ q02: num  1 1 3 1 1 1 3 2 3 4 ...
+ $ q03: num  4 4 2 1 3 3 3 3 1 4 ...
+ $ q04: num  2 3 2 4 2 2 2 2 4 3 ...
+ $ q05: num  2 2 4 3 2 4 2 2 5 2 ...
+ $ q06: num  2 2 1 3 3 4 2 2 3 1 ...
+ $ q07: num  3 2 2 4 3 4 2 2 5 2 ...
+ $ q08: num  1 2 2 2 2 2 2 2 5 2 ...</code></pre>
+</div>
+<pre class="r cell-code"><code>colSums(is.na(saq))</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>q01 q02 q03 q04 q05 q06 q07 q08 
+  0   0   0   0   0   0   0   0 </code></pre>
+</div>
+<pre class="r cell-code"><code>knitr::kable(head(saq), caption = &quot;First six SAQ-8 records&quot;)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<caption>First six SAQ-8 records</caption>
+<thead>
+<tr class="header">
+<th style="text-align: right;">q01</th>
+<th style="text-align: right;">q02</th>
+<th style="text-align: right;">q03</th>
+<th style="text-align: right;">q04</th>
+<th style="text-align: right;">q05</th>
+<th style="text-align: right;">q06</th>
+<th style="text-align: right;">q07</th>
+<th style="text-align: right;">q08</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2</td>
+</tr>
+</tbody>
+</table>
+</div>
+<pre class="r cell-code"><code>knitr::kable(cor(saq), digits = 2, caption = &quot;Pearson item correlations&quot;)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<caption>Pearson item correlations</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: right;">q01</th>
+<th style="text-align: right;">q02</th>
+<th style="text-align: right;">q03</th>
+<th style="text-align: right;">q04</th>
+<th style="text-align: right;">q05</th>
+<th style="text-align: right;">q06</th>
+<th style="text-align: right;">q07</th>
+<th style="text-align: right;">q08</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">q01</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">-0.10</td>
+<td style="text-align: right;">-0.34</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">0.33</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">q02</td>
+<td style="text-align: right;">-0.10</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">-0.11</td>
+<td style="text-align: right;">-0.12</td>
+<td style="text-align: right;">-0.07</td>
+<td style="text-align: right;">-0.16</td>
+<td style="text-align: right;">-0.05</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">q03</td>
+<td style="text-align: right;">-0.34</td>
+<td style="text-align: right;">0.32</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">-0.38</td>
+<td style="text-align: right;">-0.31</td>
+<td style="text-align: right;">-0.23</td>
+<td style="text-align: right;">-0.38</td>
+<td style="text-align: right;">-0.26</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">q04</td>
+<td style="text-align: right;">0.44</td>
+<td style="text-align: right;">-0.11</td>
+<td style="text-align: right;">-0.38</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: right;">0.28</td>
+<td style="text-align: right;">0.41</td>
+<td style="text-align: right;">0.35</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">q05</td>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: right;">-0.12</td>
+<td style="text-align: right;">-0.31</td>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">q06</td>
+<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">-0.07</td>
+<td style="text-align: right;">-0.23</td>
+<td style="text-align: right;">0.28</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">0.22</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">q07</td>
+<td style="text-align: right;">0.31</td>
+<td style="text-align: right;">-0.16</td>
+<td style="text-align: right;">-0.38</td>
+<td style="text-align: right;">0.41</td>
+<td style="text-align: right;">0.34</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">0.30</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">q08</td>
+<td style="text-align: right;">0.33</td>
+<td style="text-align: right;">-0.05</td>
+<td style="text-align: right;">-0.26</td>
+<td style="text-align: right;">0.35</td>
+<td style="text-align: right;">0.27</td>
+<td style="text-align: right;">0.22</td>
+<td style="text-align: right;">0.30</td>
+<td style="text-align: right;">1.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>The file has 2,571 responses and 23 variables. All eight SAQ items are complete. The two computer items, q06 and q07, have the strongest positive correlation (.51). The positively worded q03 correlates negatively with anxiety items such as q04 (−.38). Item q02 correlates weakly with most items, except q03 (.32).</p>
+<h1 data-number="3" id="cfa-concepts"><span class="header-section-number">3</span> CFA concepts</h1>
+<h2 data-number="3.1" id="measurement-model-and-implied-covariance"><span class="header-section-number">3.1</span> Measurement model and implied covariance</h2>
+<p>An observed indicator is a recorded item response. A latent factor is a construct inferred from common variation in the indicators. For item <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>i</mi><annotation encoding="application/x-tex">i</annotation></semantics></math>, the measurement equation is <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>i</mi></msub><mo>=</mo><msub><mi>τ</mi><mi>i</mi></msub><mo>+</mo><msub><mi>λ</mi><mi>i</mi></msub><mi>η</mi><mo>+</mo><msub><mi>ϵ</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">y_i = \tau_i + \lambda_i\eta + \epsilon_i</annotation></semantics></math>, where <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>τ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\tau_i</annotation></semantics></math> is an intercept, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>η</mi><annotation encoding="application/x-tex">\eta</annotation></semantics></math> is the latent factor, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>λ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\lambda_i</annotation></semantics></math> is the loading, and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msub><mi>ϵ</mi><mi>i</mi></msub><annotation encoding="application/x-tex">\epsilon_i</annotation></semantics></math> is the residual. The covariance-only models below use the centered form of this equation.</p>
+<p>If residuals are uncorrelated with the factors, the implied item covariance matrix is <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover><mi mathvariant="normal">Σ</mi><mo accent="true">̂</mo></mover><mo>=</mo><mover><mi mathvariant="normal">Λ</mi><mo accent="true">̂</mo></mover><mover><mi mathvariant="normal">Φ</mi><mo accent="true">̂</mo></mover><msup><mover><mi mathvariant="normal">Λ</mi><mo accent="true">̂</mo></mover><mi>⊤</mi></msup><mo>+</mo><mover><mi mathvariant="normal">Θ</mi><mo accent="true">̂</mo></mover></mrow><annotation encoding="application/x-tex">\widehat\Sigma = \widehat\Lambda\widehat\Phi\widehat\Lambda^\top + \widehat\Theta</annotation></semantics></math>. The loading matrix <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="normal">Λ</mi><annotation encoding="application/x-tex">\Lambda</annotation></semantics></math> links factors to items, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="normal">Φ</mi><annotation encoding="application/x-tex">\Phi</annotation></semantics></math> gives the covariance of the factors, and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="normal">Θ</mi><annotation encoding="application/x-tex">\Theta</annotation></semantics></math> contains the item residual variances and any modeled residual covariances. Here <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi mathvariant="normal">Θ</mi><annotation encoding="application/x-tex">\Theta</annotation></semantics></math> is diagonal. For example, the three-item model predicts <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">Cov</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>q</mi><mn>03</mn><mo>,</mo><mi>q</mi><mn>04</mn><mo stretchy="false" form="postfix">)</mo><mo>=</mo><msub><mi>λ</mi><mn>03</mn></msub><msub><mi>λ</mi><mn>04</mn></msub><mrow><mi mathvariant="normal">Var</mi><mo>⁡</mo></mrow><mo stretchy="false" form="prefix">(</mo><mi>f</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\operatorname{Cov}(q03,q04) = \lambda_{03}\lambda_{04}\operatorname{Var}(f)</annotation></semantics></math>.</p>
+<p>In a path diagram, ovals represent factors, rectangles represent items, single-headed arrows show loadings, and double-headed arrows show covariances.</p>
+<h2 data-number="3.2" id="identification-and-degrees-of-freedom"><span class="header-section-number">3.2</span> Identification and degrees of freedom</h2>
+<p>Identification asks whether the observed moments determine a unique parameter solution once the scale and direction of each factor are set. The known values are distinct observed variances and covariances. Free parameters are estimated, and fixed parameters are assigned values by the model. For <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>p</mi><annotation encoding="application/x-tex">p</annotation></semantics></math> items and a covariance-only model, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mi>f</mi><mo>=</mo><mi>p</mi><mo stretchy="false" form="prefix">(</mo><mi>p</mi><mo>+</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo><mi>/</mi><mn>2</mn><mo>−</mo><mi>k</mi></mrow><annotation encoding="application/x-tex">df = p(p+1)/2 - k</annotation></semantics></math>, where <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>k</mi><annotation encoding="application/x-tex">k</annotation></semantics></math> is the number of independent free parameters.</p>
+<table class="caption-top">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 26%">
+<col style="width: 26%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Example</th>
+<th style="text-align: right;">Known moments</th>
+<th style="text-align: right;">Free parameters</th>
+<th style="text-align: right;">Degrees of freedom</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Three items with marker loading</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">2 loadings + 3 residual variances + 1 factor variance</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td>Three items with unit factor variance</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">3 loadings + 3 residual variances</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td>Two items with only a marker constraint</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">1 loading + 2 residual variances + 1 factor variance</td>
+<td style="text-align: right;">−1</td>
+</tr>
+<tr class="even">
+<td>Eight items with marker loading</td>
+<td style="text-align: right;">36</td>
+<td style="text-align: right;">7 loadings + 8 residual variances + 1 factor variance</td>
+<td style="text-align: right;">20</td>
+</tr>
+</tbody>
+</table>
+<p>The two-item model is under-identified. Both three-item models are just-identified, and the eight-item model is over-identified. A nonnegative degrees-of-freedom count is necessary for identification, and the model structure must also permit unique estimates.</p>
+<h1 data-number="4" id="one-factor-cfa"><span class="header-section-number">4</span> One-factor CFA</h1>
+<h2 data-number="4.1" id="three-item-model"><span class="header-section-number">4.1</span> Three-item model</h2>
+<p>The operator <code>=~</code> assigns q03, q04, and q05 to factor <code>f</code>. The marker method fixes the q03 loading to 1 and estimates the factor variance. The unit-variance method frees the q03 loading with <code>NA*</code> and fixes the variance to 1.</p>
+<div class="cell">
+<pre class="r cell-code"><code>m1a &lt;- &#39;f =~ q03 + q04 + q05&#39;
+m1b &lt;- &#39;
+  f =~ NA*q03 + q04 + q05
+  f ~~ 1*f
+&#39;
+marker &lt;- cfa(m1a, data = saq)
+unit &lt;- cfa(m1b, data = saq)
+
+summary(marker, standardized = TRUE)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>lavaan 0.7-3 ended normally after 23 iterations
+
+  Estimator                                         ML
+  Optimization method                           NLMINB
+  Number of model parameters                         6
+
+  Number of observations                          2571
+
+Model Test User Model:
+                                                      
+  Test statistic                                 0.000
+  Degrees of freedom                                 0
+                                                      
+  Browne&#39;s residual (NT model-based) test             
+  Test statistic                                -0.000
+  Degrees of freedom                                 0
+
+Parameter Estimates:
+
+  Standard errors                             Standard
+  Information                                 Expected
+  Information saturated (h1) model          Structured
+
+Latent Variables:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+  f =~                                                                  
+    q03               1.000                               0.583    0.543
+    q04              -1.139    0.073  -15.652    0.000   -0.665   -0.701
+    q05              -0.945    0.056  -16.840    0.000   -0.551   -0.572
+
+Variances:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+   .q03               0.815    0.031   26.484    0.000    0.815    0.705
+   .q04               0.458    0.030   15.359    0.000    0.458    0.509
+   .q05               0.626    0.025   24.599    0.000    0.626    0.673
+    f                 0.340    0.031   11.034    0.000    1.000    1.000</code></pre>
+</div>
+<pre class="r cell-code"><code>summary(unit, standardized = TRUE)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>lavaan 0.7-3 ended normally after 14 iterations
+
+  Estimator                                         ML
+  Optimization method                           NLMINB
+  Number of model parameters                         6
+
+  Number of observations                          2571
+
+Model Test User Model:
+                                                      
+  Test statistic                                 0.000
+  Degrees of freedom                                 0
+                                                      
+  Browne&#39;s residual (NT model-based) test             
+  Test statistic                                -0.000
+  Degrees of freedom                                 0
+
+Parameter Estimates:
+
+  Standard errors                             Standard
+  Information                                 Expected
+  Information saturated (h1) model          Structured
+
+Latent Variables:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+  f =~                                                                  
+    q03               0.583    0.026   22.067    0.000    0.583    0.543
+    q04              -0.665    0.026  -25.605    0.000   -0.665   -0.701
+    q05              -0.551    0.024  -22.800    0.000   -0.551   -0.572
+
+Variances:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+    f                 1.000                               1.000    1.000
+   .q03               0.815    0.031   26.484    0.000    0.815    0.705
+   .q04               0.458    0.030   15.359    0.000    0.458    0.509
+   .q05               0.626    0.025   24.599    0.000    0.626    0.673</code></pre>
+</div>
+<pre class="r cell-code"><code># Compare the covariance implied by the model with lavaan&#39;s ML input.
+implied &lt;- fitted(marker)$cov
+round(implied, 3)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>       q03    q04    q05
+q03  1.155              
+q04 -0.388  0.899       
+q05 -0.322  0.366  0.930</code></pre>
+</div>
+<pre class="r cell-code"><code>round(lavInspect(marker, &quot;sampstat&quot;)$cov - implied, 6)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>    q03 q04 q05
+q03   0        
+q04   0   0    
+q05   0   0   0</code></pre>
+</div>
+<pre class="r cell-code"><code>max(abs(implied - fitted(unit)$cov))</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1.053359e-08</code></pre>
+</div>
+</div>
+<p>Using q03 as the marker gives q04 and q05 negative loadings. Both scaling methods yield equivalent implied covariances and fully standardized estimates. For these single-loading items, squaring <code>Std.all</code> gives the explained proportion of item variance. The standardized residual variance gives the remainder. Both models reproduce the sample covariance because they have zero degrees of freedom.</p>
+<h2 data-number="4.2" id="eight-item-model"><span class="header-section-number">4.2</span> Eight-item model</h2>
+<p>This model tests whether one factor can reproduce the covariances among all eight items.</p>
+<div class="cell">
+<pre class="r cell-code"><code>eight_spec &lt;- &#39;f =~ q01 + q02 + q03 + q04 + q05 + q06 + q07 + q08&#39;
+eight &lt;- cfa(eight_spec, data = saq)
+summary(eight, fit.measures = TRUE, standardized = TRUE, rsquare = TRUE)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>lavaan 0.7-3 ended normally after 26 iterations
+
+  Estimator                                         ML
+  Optimization method                           NLMINB
+  Number of model parameters                        16
+
+  Number of observations                          2571
+
+Model Test User Model:
+                                                      
+  Test statistic                               554.191
+  Degrees of freedom                                20
+  P-value (Chi-square)                           0.000
+                                                      
+  Browne&#39;s residual (NT model-based) test             
+  Test statistic                               571.558
+  Degrees of freedom                                20
+  P-value (Chi-square)                           0.000
+
+Model Test Baseline Model:
+
+  Test statistic                              4164.572
+  Degrees of freedom                                28
+  P-value                                        0.000
+
+User Model versus Baseline Model:
+
+  Comparative Fit Index (CFI)                    0.871
+  Tucker-Lewis Index (TLI)                       0.819
+
+Loglikelihood and Information Criteria:
+
+  Loglikelihood user model (H0)             -26629.559
+  Loglikelihood unrestricted model (H1)     -26352.464
+                                                      
+  Akaike (AIC)                               53291.118
+  Bayesian (BIC)                             53384.751
+  Sample-size adjusted Bayesian (SABIC)      53333.914
+
+Root Mean Square Error of Approximation:
+
+  RMSEA                                          0.102
+  90 Percent confidence interval - lower         0.095
+  90 Percent confidence interval - upper         0.109
+  P-value H_0: RMSEA &lt;= 0.050                    0.000
+  P-value H_0: RMSEA &gt;= 0.080                    1.000
+
+Standardized Root Mean Square Residual:
+
+  SRMR                                           0.055
+
+Goodness of Fit Index:
+
+  Goodness of Fit Index (GFI)                    0.949
+  90 Percent confidence interval - lower         0.942
+  90 Percent confidence interval - upper         0.956
+
+Parameter Estimates:
+
+  Standard errors                             Standard
+  Information                                 Expected
+  Information saturated (h1) model          Structured
+
+Latent Variables:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+  f =~                                                                  
+    q01               1.000                               0.485    0.586
+    q02              -0.408    0.040  -10.163    0.000   -0.198   -0.233
+    q03              -1.262    0.058  -21.697    0.000   -0.612   -0.570
+    q04               1.303    0.054   24.006    0.000    0.632    0.667
+    q05               1.142    0.052   21.821    0.000    0.554    0.574
+    q06               1.142    0.058   19.547    0.000    0.554    0.494
+    q07               1.476    0.062   23.644    0.000    0.716    0.650
+    q08               0.873    0.045   19.294    0.000    0.424    0.486
+
+Variances:
+                   Estimate  Std.Err  z-value  P(&gt;|z|)   Std.lv  Std.all
+   .q01               0.450    0.015   30.734    0.000    0.450    0.656
+   .q02               0.685    0.019   35.300    0.000    0.685    0.946
+   .q03               0.780    0.025   31.157    0.000    0.780    0.675
+   .q04               0.499    0.018   27.989    0.000    0.499    0.555
+   .q05               0.623    0.020   31.040    0.000    0.623    0.670
+   .q06               0.951    0.029   32.711    0.000    0.951    0.756
+   .q07               0.702    0.024   28.678    0.000    0.702    0.578
+   .q08               0.581    0.018   32.849    0.000    0.581    0.764
+    f                 0.235    0.016   14.471    0.000    1.000    1.000
+
+R-Square:
+                   Estimate
+    q01               0.344
+    q02               0.054
+    q03               0.325
+    q04               0.445
+    q05               0.330
+    q06               0.244
+    q07               0.422
+    q08               0.236</code></pre>
+</div>
+</div>
+<p>The model fits poorly overall (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>χ</mi><mn>2</mn></msup><mo stretchy="false" form="prefix">(</mo><mn>20</mn><mo stretchy="false" form="postfix">)</mo><mo>=</mo><mn>554.191</mn></mrow><annotation encoding="application/x-tex">\chi^2(20)=554.191</annotation></semantics></math>, <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>&lt;</mo><mn>.001</mn></mrow><annotation encoding="application/x-tex">p&lt;.001</annotation></semantics></math>, CFI = .871, TLI = .819, RMSEA = .102), despite an SRMR of .055. Item q02 has a weak standardized loading and high residual variance.</p>
+<p>SRMR summarizes standardized residuals. Lower AIC and BIC favor models fitted to the same observed items and cases.</p>
+<h1 data-number="5" id="two-factor-cfa"><span class="header-section-number">5</span> Two-factor CFA</h1>
+<p>UCLA omits q02. SPSS Anxiety uses q01, q03–q05, and q08. Attribution Bias uses the two computer items, q06 and q07.</p>
+<div class="cell">
+<pre class="r cell-code"><code>loading_table &lt;- function(fit) {
+  estimates &lt;- parameterEstimates(fit, standardized = TRUE)
+  rows &lt;- estimates$op == &quot;=~&quot;
+  knitr::kable(
+    estimates[rows, c(&quot;lhs&quot;, &quot;rhs&quot;, &quot;est&quot;, &quot;std.all&quot;)],
+    col.names = c(&quot;Factor&quot;, &quot;Indicator&quot;, &quot;Estimate&quot;, &quot;Std. loading&quot;),
+    digits = 3, row.names = FALSE
+  )
+}</code></pre>
+</div>
+<h2 data-number="5.1" id="uncorrelated-factors"><span class="header-section-number">5.1</span> Uncorrelated factors</h2>
+<p>The model fixes factor covariance at zero. The label <code>a</code> equates the two raw Attribution Bias loadings for identification with unit factor variance.</p>
+<div class="cell">
+<pre class="r cell-code"><code>orthogonal_spec &lt;- &#39;
+  anxiety =~ q01 + q03 + q04 + q05 + q08
+  attribution =~ a*q06 + a*q07
+  anxiety ~~ 0*attribution
+&#39;
+orthogonal &lt;- cfa(orthogonal_spec, data = saq, std.lv = TRUE)
+loading_table(orthogonal)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Factor</th>
+<th style="text-align: left;">Indicator</th>
+<th style="text-align: right;">Estimate</th>
+<th style="text-align: right;">Std. loading</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q01</td>
+<td style="text-align: right;">0.539</td>
+<td style="text-align: right;">0.651</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q03</td>
+<td style="text-align: right;">-0.573</td>
+<td style="text-align: right;">-0.533</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q04</td>
+<td style="text-align: right;">0.652</td>
+<td style="text-align: right;">0.687</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q05</td>
+<td style="text-align: right;">0.567</td>
+<td style="text-align: right;">0.588</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q08</td>
+<td style="text-align: right;">0.431</td>
+<td style="text-align: right;">0.494</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q06</td>
+<td style="text-align: right;">0.797</td>
+<td style="text-align: right;">0.710</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q07</td>
+<td style="text-align: right;">0.797</td>
+<td style="text-align: right;">0.723</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>The standardized q06 and q07 loadings are .710 and .723 because the item variances differ. The model implies zero cross-factor item covariance and fits poorly (RMSEA = .146).</p>
+<h2 data-number="5.2" id="correlated-factors"><span class="header-section-number">5.2</span> Correlated factors</h2>
+<p>This model estimates the factor covariance and lets the computer-item loadings differ. With <code>std.lv = TRUE</code>, the covariance is also the correlation. A nonzero association with SPSS Anxiety helps identify the two computer-item loadings.</p>
+<div class="cell">
+<pre class="r cell-code"><code>correlated_spec &lt;- &#39;
+  anxiety =~ q01 + q03 + q04 + q05 + q08
+  attribution =~ q06 + q07
+  anxiety ~~ attribution
+&#39;
+correlated &lt;- cfa(correlated_spec, data = saq, std.lv = TRUE)
+loading_table(correlated)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Factor</th>
+<th style="text-align: left;">Indicator</th>
+<th style="text-align: right;">Estimate</th>
+<th style="text-align: right;">Std. loading</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q01</td>
+<td style="text-align: right;">0.513</td>
+<td style="text-align: right;">0.619</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q03</td>
+<td style="text-align: right;">-0.599</td>
+<td style="text-align: right;">-0.557</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q04</td>
+<td style="text-align: right;">0.658</td>
+<td style="text-align: right;">0.694</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q05</td>
+<td style="text-align: right;">0.567</td>
+<td style="text-align: right;">0.588</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q08</td>
+<td style="text-align: right;">0.435</td>
+<td style="text-align: right;">0.498</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q06</td>
+<td style="text-align: right;">0.669</td>
+<td style="text-align: right;">0.596</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q07</td>
+<td style="text-align: right;">0.949</td>
+<td style="text-align: right;">0.861</td>
+</tr>
+</tbody>
+</table>
+</div>
+<pre class="r cell-code"><code>round(lavInspect(correlated, &quot;cor.lv&quot;), 3)</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>            anxity attrbt
+anxiety      1.000       
+attribution  0.676  1.000</code></pre>
+</div>
+</div>
+<p>The factors correlate .676. Fit improves (CFI = .986, TLI = .977, RMSEA = .040), although chi-square still rejects exact fit. The comparison reflects both the freed covariance and the freed loading equality constraint.</p>
+<h1 data-number="6" id="second-order-cfa"><span class="header-section-number">6</span> Second-order CFA</h1>
+<p>Overall Anxiety predicts the two first-order factors. Each first-order factor uses its first item as the marker. Both higher-order loadings are fixed to 1 for identification, and the overall factor variance is estimated. The first-order factors’ residual covariance is fixed to zero.</p>
+<div class="cell">
+<pre class="r cell-code"><code>hierarchy_spec &lt;- &#39;
+  anxiety =~ 1*q01 + q03 + q04 + q05 + q08
+  attribution =~ 1*q06 + q07
+  overall =~ 1*anxiety + 1*attribution
+  overall ~~ overall
+  anxiety ~~ 0*attribution
+&#39;
+hierarchy &lt;- cfa(hierarchy_spec, data = saq)
+loading_table(hierarchy)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Factor</th>
+<th style="text-align: left;">Indicator</th>
+<th style="text-align: right;">Estimate</th>
+<th style="text-align: right;">Std. loading</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q01</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.619</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q03</td>
+<td style="text-align: right;">-1.169</td>
+<td style="text-align: right;">-0.557</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q04</td>
+<td style="text-align: right;">1.284</td>
+<td style="text-align: right;">0.694</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q05</td>
+<td style="text-align: right;">1.107</td>
+<td style="text-align: right;">0.588</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: left;">q08</td>
+<td style="text-align: right;">0.848</td>
+<td style="text-align: right;">0.498</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q06</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.596</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">attribution</td>
+<td style="text-align: left;">q07</td>
+<td style="text-align: right;">1.419</td>
+<td style="text-align: right;">0.861</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">overall</td>
+<td style="text-align: left;">anxiety</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.939</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">overall</td>
+<td style="text-align: left;">attribution</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.720</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>The standardized higher-order loadings (.939 and .720) multiply to .676, the correlation from the two-factor model. Both models have the same fit, so these data cannot distinguish the hierarchical interpretation.</p>
+<h1 data-number="7" id="model-comparison"><span class="header-section-number">7</span> Model comparison</h1>
+<p>The seven-item one-factor model allows comparison on the same items and respondents as the two-factor and second-order models.</p>
+<div class="cell">
+<pre class="r cell-code"><code>seven_spec &lt;- &#39;f =~ q01 + q03 + q04 + q05 + q06 + q07 + q08&#39;
+seven &lt;- cfa(seven_spec, data = saq)
+
+models &lt;- list(
+  &quot;One factor, eight items&quot; = eight,
+  &quot;One factor, seven items&quot; = seven,
+  &quot;Two uncorrelated factors&quot; = orthogonal,
+  &quot;Two correlated factors&quot; = correlated,
+  &quot;Second-order factor&quot; = hierarchy
+)
+stopifnot(all(vapply(models, function(fit) {
+  lavInspect(fit, &quot;converged&quot;) &amp;&amp; lavInspect(fit, &quot;post.check&quot;)
+}, logical(1))))
+
+fit_columns &lt;- c(&quot;chisq&quot;, &quot;df&quot;, &quot;pvalue&quot;, &quot;cfi&quot;, &quot;tli&quot;, &quot;rmsea&quot;,
+                 &quot;rmsea.ci.lower&quot;, &quot;rmsea.ci.upper&quot;, &quot;srmr&quot;)
+comparison &lt;- as.data.frame(t(vapply(
+  models, function(fit) as.numeric(fitMeasures(fit, fit_columns)),
+  numeric(length(fit_columns))
+)))
+names(comparison) &lt;- c(&quot;Chi-square&quot;, &quot;df&quot;, &quot;p&quot;, &quot;CFI&quot;, &quot;TLI&quot;,
+                       &quot;RMSEA&quot;, &quot;90% CI low&quot;, &quot;90% CI high&quot;, &quot;SRMR&quot;)
+comparison$p &lt;- format.pval(comparison$p, digits = 3, eps = .001)
+knitr::kable(comparison, digits = 3, caption = &quot;Maximum likelihood model fit&quot;)</code></pre>
+<div class="cell-output-display">
+<table class="caption-top" style="width:100%;">
+<caption>Maximum likelihood model fit</caption>
+<colgroup>
+<col style="width: 26%">
+<col style="width: 11%">
+<col style="width: 3%">
+<col style="width: 7%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 11%">
+<col style="width: 12%">
+<col style="width: 6%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;"></th>
+<th style="text-align: right;">Chi-square</th>
+<th style="text-align: right;">df</th>
+<th style="text-align: left;">p</th>
+<th style="text-align: right;">CFI</th>
+<th style="text-align: right;">TLI</th>
+<th style="text-align: right;">RMSEA</th>
+<th style="text-align: right;">90% CI low</th>
+<th style="text-align: right;">90% CI high</th>
+<th style="text-align: right;">SRMR</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">One factor, eight items</td>
+<td style="text-align: right;">554.191</td>
+<td style="text-align: right;">20</td>
+<td style="text-align: left;">&lt;0.001</td>
+<td style="text-align: right;">0.871</td>
+<td style="text-align: right;">0.819</td>
+<td style="text-align: right;">0.102</td>
+<td style="text-align: right;">0.095</td>
+<td style="text-align: right;">0.109</td>
+<td style="text-align: right;">0.055</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">One factor, seven items</td>
+<td style="text-align: right;">376.321</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: left;">&lt;0.001</td>
+<td style="text-align: right;">0.906</td>
+<td style="text-align: right;">0.859</td>
+<td style="text-align: right;">0.100</td>
+<td style="text-align: right;">0.092</td>
+<td style="text-align: right;">0.109</td>
+<td style="text-align: right;">0.049</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Two uncorrelated factors</td>
+<td style="text-align: right;">841.205</td>
+<td style="text-align: right;">15</td>
+<td style="text-align: left;">&lt;0.001</td>
+<td style="text-align: right;">0.786</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.146</td>
+<td style="text-align: right;">0.138</td>
+<td style="text-align: right;">0.155</td>
+<td style="text-align: right;">0.180</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Two correlated factors</td>
+<td style="text-align: right;">66.768</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: left;">&lt;0.001</td>
+<td style="text-align: right;">0.986</td>
+<td style="text-align: right;">0.977</td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.031</td>
+<td style="text-align: right;">0.050</td>
+<td style="text-align: right;">0.021</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Second-order factor</td>
+<td style="text-align: right;">66.768</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: left;">&lt;0.001</td>
+<td style="text-align: right;">0.986</td>
+<td style="text-align: right;">0.977</td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.031</td>
+<td style="text-align: right;">0.050</td>
+<td style="text-align: right;">0.021</td>
+</tr>
+</tbody>
+</table>
+</div>
+<pre class="r cell-code"><code># Check whether the two best-fitting models reproduce the same item covariances.
+order7 &lt;- c(&quot;q01&quot;, &quot;q03&quot;, &quot;q04&quot;, &quot;q05&quot;, &quot;q08&quot;, &quot;q06&quot;, &quot;q07&quot;)
+max(abs(fitted(correlated)$cov[order7, order7] -
+        fitted(hierarchy)$cov[order7, order7]))</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1.572575e-07</code></pre>
+</div>
+</div>
+<p>The correlated model fits the seven items best alongside the equivalent second-order model. The two-factor structure preserves two interpretable dimensions with fewer theoretical assumptions.</p>
+<h1 data-number="8" id="practice-questions-and-answers"><span class="header-section-number">8</span> Practice questions and answers</h1>
+<ol type="1">
+<li><p><strong>What is the difference between exploratory factor analysis and confirmatory factor analysis?</strong></p>
+<p>EFA explores possible factor structures. CFA tests whether a prespecified structure reproduces the observed covariances.</p></li>
+<li><p><strong>What are the observed indicators and latent factors in the SAQ-8 example?</strong></p>
+<p>The observed indicators are q01–q08. The seven-item models use SPSS Anxiety (q01, q03–q05, q08) and Attribution Bias (q06–q07). The hierarchical model adds overall Anxiety.</p></li>
+<li><p><strong>What do factor loadings represent?</strong></p>
+<p>A loading is the expected item-score change per unit of the factor. Standardized loadings use standard-deviation units. The .861 loading for q07 shows a stronger association with Attribution Bias than the .596 loading for q06.</p></li>
+<li><p><strong>What do residual variances represent?</strong></p>
+<p>Residual variance is the item variance left unexplained by its factor, including item-specific variation and measurement error. For q07, about 26% remains unexplained in the correlated model.</p></li>
+<li><p><strong>How many unique variances and covariances are available for a model with three observed indicators?</strong></p>
+<p>There are six unique entries, with three variances and three covariances, from <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo stretchy="false" form="prefix">(</mo><mi>p</mi><mo>+</mo><mn>1</mn><mo stretchy="false" form="postfix">)</mo><mi>/</mi><mn>2</mn><mo>=</mo><mn>3</mn><mo stretchy="false" form="prefix">(</mo><mn>4</mn><mo stretchy="false" form="postfix">)</mo><mi>/</mi><mn>2</mn><mo>=</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">p(p+1)/2 = 3(4)/2 = 6</annotation></semantics></math>.</p></li>
+<li><p><strong>What is the difference between a fixed parameter and a free parameter?</strong></p>
+<p>A fixed parameter is set in the model, such as the q03 marker loading of 1. A free parameter, such as the marker model’s factor variance, is estimated.</p></li>
+<li><p><strong>Why is a model with negative degrees of freedom under-identified?</strong></p>
+<p>Negative degrees of freedom mean there are more independent free parameters than observed moments, so the parameters cannot be uniquely estimated.</p></li>
+<li><p><strong>Why does fixing one loading and setting residual covariances to zero help identify a model?</strong></p>
+<p>A fixed marker loading sets the factor’s unit. Setting residual covariances to zero reduces the unknowns and attributes shared item variation to the factor. This leaves six free parameters for six observed moments in the three-item model.</p></li>
+<li><p><strong>What is the difference between a just-identified model and an over-identified model?</strong></p>
+<p>A just-identified model has zero degrees of freedom and can reproduce the observed moments exactly. An over-identified model has positive degrees of freedom, allowing a global fit test.</p></li>
+<li><p><strong>How should chi-square, CFI, TLI, and RMSEA be interpreted?</strong></p>
+<p>Chi-square tests exact fit, with a small p-value indicating misfit. Higher CFI and TLI indicate better fit relative to an independence baseline, and TLI accounts for model complexity. Lower RMSEA indicates less approximate misfit per degree of freedom. The eight-item model shows misfit across these measures.</p></li>
+<li><p><strong>What is the difference between correlated and uncorrelated factors?</strong></p>
+<p>A correlated model estimates the covariance between factors. An uncorrelated model fixes it at zero, implying zero cross-factor item covariance when cross-loadings and residual covariances are also zero.</p></li>
+<li><p><strong>What does a second-order factor represent?</strong></p>
+<p>A second-order factor explains covariance among first-order factors. Here overall Anxiety accounts for the association between SPSS Anxiety and Attribution Bias.</p></li>
+<li><p><strong>Which model appears most theoretically and statistically appropriate based on the results?</strong></p>
+<p>I would use the correlated seven-item model. Its fit is good (CFI = .986, TLI = .977, RMSEA = .040), and its two dimensions have clear interpretations. The hierarchy gives the same fit.</p></li>
+<li><p><strong>What additional information would you want before making a final decision about the measurement model?</strong></p>
+<p>I would check item wording and coding, the effect of omitting q02, subscale reliability and validity, and fit with an ordinal estimator. I would also replicate the model in a new sample and look for more indicators of Attribution Bias.</p></li>
+</ol>
+<h1 data-number="9" id="summary-of-important-lessons"><span class="header-section-number">9</span> Summary of important lessons</h1>
+<ul>
+<li>Check identification before testing fit.</li>
+<li>Read loadings, residual variances, and fit indices together.</li>
+<li>Compare models on the same items. Equal fit can leave competing explanations unresolved.</li>
+</ul>
+<h1 data-number="10" id="references"><span class="header-section-number">10</span> References</h1>
+<ul>
+<li>UCLA Office of Advanced Research Computing. <a href="https://stats.oarc.ucla.edu/r/seminars/rcfa/">Confirmatory Factor Analysis (CFA) in R with lavaan</a>. Seminar, model specifications, and <a href="https://stats.oarc.ucla.edu/wp-content/uploads/2018/05/SAQ.sav">SAQ dataset</a>.</li>
+<li>Rosseel, Y. (2012). lavaan: An R Package for Structural Equation Modeling. <em>Journal of Statistical Software, 48</em>(2), 1–36. <a href="https://doi.org/10.18637/jss.v048.i02">doi:10.18637/jss.v048.i02</a>.</li>
+</ul>
+<h1 data-number="11" id="appendix"><span class="header-section-number">11</span> Appendix</h1>
+<h2 data-number="11.1" id="reproducibility"><span class="header-section-number">11.1</span> Reproducibility</h2>
+<div class="cell">
+<pre class="r cell-code"><code>c(R = R.version.string, lavaan = as.character(packageVersion(&quot;lavaan&quot;)),
+  haven = as.character(packageVersion(&quot;haven&quot;)))</code></pre>
+<div class="cell-output cell-output-stdout">
+<pre><code>                             R                         lavaan 
+&quot;R version 4.5.2 (2025-10-31)&quot;                        &quot;0.7.3&quot; 
+                         haven 
+                       &quot;2.5.5&quot; </code></pre>
+</div>
+</div>
+<h2 data-number="11.2" id="project-links"><span class="header-section-number">11.2</span> Project links</h2>
+<ul>
+<li><a href="https://github.com/gmonjarrez/m11-cfa-study-note">GitHub repository</a></li>
+<li><a href="https://gmonjarrez.github.io/m11-cfa-study-note/">GitHub Pages website</a></li>
+</ul>
+
+
+
+
+
+</body></html>
